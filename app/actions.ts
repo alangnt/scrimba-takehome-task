@@ -86,27 +86,24 @@ text{font-family:'Segoe UI',system-ui,sans-serif;pointer-events:none}
 
 // Shared <defs> the model references by id but never has to write.
 const DEFS = `
-  <marker id="ah" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto"><polygon points="0 0,8 3,0 6" fill="white"/></marker>
-  <marker id="ahb" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto"><polygon points="0 0,8 3,0 6" fill="#60a5fa"/></marker>
-  <filter id="glow" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="4" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
-  <filter id="glow-lg" x="-75%" y="-75%" width="250%" height="250%"><feGaussianBlur stdDeviation="9" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
-  <filter id="shadow" x="-30%" y="-30%" width="160%" height="160%"><feDropShadow dx="0" dy="4" stdDeviation="6" flood-color="#000" flood-opacity="0.45"/></filter>
-  <linearGradient id="grad-blue" x1="0" y1="0" x2="1" y2="1" gradientUnits="objectBoundingBox"><stop offset="0%" stop-color="#6366f1"/><stop offset="100%" stop-color="#8b5cf6"/></linearGradient>
-  <linearGradient id="grad-card" x1="0" y1="0" x2="0" y2="1" gradientUnits="objectBoundingBox"><stop offset="0%" stop-color="rgba(99,102,241,0.22)"/><stop offset="100%" stop-color="rgba(99,102,241,0.04)"/></linearGradient>
-  <linearGradient id="grad-green" x1="0" y1="0" x2="1" y2="1" gradientUnits="objectBoundingBox"><stop offset="0%" stop-color="#10b981"/><stop offset="100%" stop-color="#34d399"/></linearGradient>
-  <linearGradient id="grad-warm" x1="0" y1="0" x2="1" y2="1" gradientUnits="objectBoundingBox"><stop offset="0%" stop-color="#f59e0b"/><stop offset="100%" stop-color="#fb923c"/></linearGradient>
+  <marker id="ah" markerWidth="6" markerHeight="5" refX="6" refY="2.5" orient="auto"><polygon points="0 0,6 2.5,0 5" fill="rgba(255,255,255,0.4)"/></marker>
+  <marker id="ahb" markerWidth="6" markerHeight="5" refX="6" refY="2.5" orient="auto"><polygon points="0 0,6 2.5,0 5" fill="rgba(99,102,241,0.7)"/></marker>
+  <filter id="glow" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="5" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+  <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%"><feDropShadow dx="0" dy="2" stdDeviation="4" flood-color="#000" flood-opacity="0.5"/></filter>
+  <linearGradient id="grad-accent" x1="0" y1="0" x2="1" y2="1" gradientUnits="objectBoundingBox"><stop offset="0%" stop-color="rgba(99,102,241,0.18)"/><stop offset="100%" stop-color="rgba(139,92,246,0.08)"/></linearGradient>
+  <linearGradient id="grad-surface" x1="0" y1="0" x2="0" y2="1" gradientUnits="objectBoundingBox"><stop offset="0%" stop-color="rgba(255,255,255,0.05)"/><stop offset="100%" stop-color="rgba(255,255,255,0.02)"/></linearGradient>
 `;
 
 // Assemble the final self-contained document from our pieces + the model's variable parts.
-function assembleHtml(svgBody: string, scenes: string, bg: string): string {
+function assembleHtml(svgBody: string, scenes: string, bg: string, extraDefs = ''): string {
   return `<!DOCTYPE html><html><head><meta charset="utf-8">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
 <style>${CSS}</style>
 <script>${ENGINE}</script>
 </head>
 <body style="background:${bg}">
-<svg viewBox="0 0 800 450" xmlns="http://www.w3.org/2000/svg">
-<defs>${DEFS}</defs>
+<svg viewBox="0 0 1200 675" xmlns="http://www.w3.org/2000/svg">
+<defs>${DEFS}${extraDefs}</defs>
 <g id="cam">
 ${svgBody}
 </g>
@@ -126,6 +123,7 @@ interface SceneElement {
   w: number;               // bounding-box width  — the element must be drawn inside this box
   h: number;               // bounding-box height
   desc: string;            // what it is + how it should look
+  connector?: boolean;     // true = arrow/line spanning between elements — not clipped
 }
 interface ScenePlan {
   enter: string[];                       // element ids appearing this scene
@@ -144,7 +142,7 @@ interface Storyboard {
 
 const DIRECTOR_PROMPT = `You are the director AND layout artist of a continuous 5-scene animated educational explainer. A separate animator draws each element to fit EXACTLY inside the bounding box you assign it, so your single most important job is a clean, NON-OVERLAPPING spatial layout. A cramped or colliding layout is a failure.
 
-CANVAS: 800×450 SVG units. Treat (0,0) as top-left. Keep a 24px margin on all sides (usable area ≈ 24..776 × 24..426).
+CANVAS: 1200×675 SVG units. Treat (0,0) as top-left. Keep a 36px margin on all sides (usable area ≈ 36..1164 × 36..639).
 
 Return STRICT JSON only (no markdown, no comments, no trailing commas):
 {
@@ -153,7 +151,8 @@ Return STRICT JSON only (no markdown, no comments, no trailing commas):
   "narrations": ["scene 1", "scene 2", "scene 3", "scene 4", "scene 5"],
   "chapters": ["The Setup", "First Clue", "...", "...", "The Payoff"],
   "elements": [
-    { "id": "kebab-case-id", "introScene": 0, "x": 60, "y": 180, "w": 180, "h": 90, "desc": "what it is + visual style: shapes, color, label, whether it glows or casts a shadow" }
+    { "id": "kebab-case-id", "introScene": 0, "x": 60, "y": 180, "w": 180, "h": 90, "desc": "what it is + visual style", "connector": false },
+  { "id": "arrow-a-to-b",  "introScene": 1, "x": 60, "y": 225, "w": 300, "h": 30,  "desc": "arrow from A to B", "connector": true }
   ],
   "scenes": [
     { "enter": ["id"], "exit": ["id"], "move": { "id": [120, -40] }, "beat": "what happens this scene and what should animate — pulse, draw arrows, count numbers up, recolor, orbit, typewrite a label, highlight key elements, shake on collision/error, etc." }
@@ -164,14 +163,15 @@ LAYOUT RULES (most important):
 - Every element has a bounding box {x, y, w, h} = top-left corner + size. The animator draws strictly inside it.
 - Boxes of elements that are VISIBLE AT THE SAME TIME must NOT overlap and must leave ≥16px gaps. Mentally place each box and verify no two on-screen-together boxes intersect.
 - At most 6 elements visible in any single scene. Use "exit" to clear elements that are no longer needed BEFORE the scene gets crowded — favour a focused composition over keeping everything on screen.
-- Choose a composition that suits the concept: side-by-side halves for a comparison (left ≈ x 40..390, right ≈ x 410..760); top-down levels for a tree/hierarchy; left-to-right stages for a process/pipeline; orbit/center for a system.
-- Realistic sizes: a short label/pill ≈ 130×46, a titled card ≈ 200×130, a big focal panel ≈ 320×150, an icon ≈ 70×70. Text must fit its box.
+- Choose a composition that suits the concept: side-by-side halves for a comparison (left ≈ x 60..580, right ≈ x 620..1140); top-down levels for a tree/hierarchy; left-to-right stages for a process/pipeline; orbit/center for a system.
+- Realistic sizes: a short label/pill ≈ 180×50, a titled card ≈ 300×180, a big focal panel ≈ 460×200, an icon/node ≈ 110×110. Text must fit its box — leave ≥20px padding on all sides.
 - move deltas are pixels from the box's position; after moving, the box must still be on-canvas and not collide with other on-screen boxes.
 
 CONTENT RULES:
 - EXACTLY 5 narrations, 5 chapters and 5 scenes. Narrations: conversational and vivid, a hook in scene 1, a payoff in scene 5, ~1–2 sentences each.
 - chapters: a punchy 2–4 word title for each scene, like documentary chapter cards (e.g. "Down the Rabbit Hole", "When Things Collide").
 - 8–12 elements total. Each element's introScene is the scene it first enters; that scene's "enter" array must include it.
+- Set "connector": true on any element that is an arrow, line, or edge connecting two other elements. Connectors may span across other elements' boxes and are exempt from overlap enforcement. All other elements must have "connector": false (or omit the field).
 - ≥3 elements persist across 2+ scenes and MOVE (shared elements drifting = the "video" feel). Pick one hero element that travels across the canvas over the 5 scenes.
 - Illustrate the concept literally and meaningfully — never abstract decoration.
 Return ONLY the JSON object.`;
@@ -190,60 +190,103 @@ const PRIMITIVES_DOC = `  show(id) / hide(id)        — fade in / out
   shake(id)                  — horizontal shake (collisions, errors, surprises)
   at(seconds, fn)            — schedule a staggered call later within the scene`;
 
+// Six ready-to-copy luxury component templates.
+// All coordinates use a concrete example box — adapt values to your element's actual (x, y, w, h).
 const STYLE_EXAMPLES = `
-STYLE REFERENCE — aim for this quality level (coordinates are relative to each element's box origin):
+AESTHETIC: sober, clean, luxury — think Stripe / Linear / Apple dark mode.
+Shapes defined by thin borders, near-invisible fills. ONE glow allowed per scene (hero only).
 
-Glowing hero node (70×70 box):
-  <circle cx="35" cy="35" r="28" fill="url(#grad-blue)" filter="url(#glow-lg)"/>
+━━ CARD — titled panel (example box x:40, y:60, w:220, h:130) ━━
+<g id="ID" style="opacity:0">
+  <rect x="40" y="60" width="220" height="130" rx="12" fill="url(#grad-surface)" stroke="rgba(255,255,255,0.07)" stroke-width="1"/>
+  <rect x="40" y="60" width="3" height="130" rx="1.5" fill="rgba(99,102,241,0.6)"/>
+  <text x="60" y="88"  font-size="9"  font-weight="500" letter-spacing="1.4" fill="#52525b">CATEGORY</text>
+  <text x="60" y="112" font-size="15" font-weight="600" fill="#fafafa">Title Here</text>
+  <text x="60" y="132" font-size="11" fill="#71717a">Supporting detail line</text>
+  <text x="60" y="150" font-size="11" fill="#71717a">Second detail line</text>
+</g>
 
-Gradient card with label (200×130 box):
-  <rect width="200" height="130" rx="14" fill="url(#grad-card)" stroke="rgba(99,102,241,0.35)" stroke-width="1" filter="url(#shadow)"/>
-  <text x="16" y="26" font-size="10" font-weight="700" letter-spacing="1.2" fill="#a5b4fc">CATEGORY</text>
-  <text x="16" y="50" font-size="15" font-weight="600" fill="#f1f5f9">Main Label</text>
-  <text x="16" y="70" font-size="11" fill="#64748b">Supporting detail</text>
+━━ NODE — entity/concept circle (example box x:180, y:160, w:80, h:80) ━━
+<g id="ID" style="opacity:0">
+  <circle cx="220" cy="200" r="36" fill="rgba(255,255,255,0.03)" stroke="rgba(255,255,255,0.08)" stroke-width="1"/>
+  <circle cx="220" cy="200" r="28" fill="rgba(99,102,241,0.07)" stroke="rgba(99,102,241,0.2)" stroke-width="1"/>
+  <text x="220" y="205" text-anchor="middle" font-size="11" font-weight="600" fill="#e4e4e7">Label</text>
+</g>
 
-Pill / badge (130×40 box):
-  <rect width="130" height="40" rx="20" fill="rgba(99,102,241,0.15)" stroke="rgba(99,102,241,0.5)" stroke-width="1"/>
-  <text x="65" y="25" text-anchor="middle" font-size="12" font-weight="600" fill="#a5b4fc">LABEL</text>
+━━ HERO NODE — focal/accent element, ONE per scene (example box x:340, y:150, w:110, h:110) ━━
+<g id="ID" style="opacity:0">
+  <circle cx="395" cy="205" r="50" fill="rgba(99,102,241,0.06)" stroke="rgba(99,102,241,0.12)" stroke-width="1"/>
+  <circle cx="395" cy="205" r="38" fill="url(#grad-accent)" stroke="rgba(99,102,241,0.35)" stroke-width="1" filter="url(#glow)"/>
+  <text x="395" y="201" text-anchor="middle" font-size="14" font-weight="600" fill="#e0e7ff">Title</text>
+  <text x="395" y="219" text-anchor="middle" font-size="9"  font-weight="500" letter-spacing="1.2" fill="#818cf8">LABEL</text>
+</g>
 
-Connector arrow between two boxes:
-  <line x1="SRC_X" y1="SRC_Y" x2="DST_X" y2="DST_Y" stroke="rgba(255,255,255,0.35)" stroke-width="1.5" marker-end="url(#ah)"/>
-  <line ... stroke="#60a5fa" stroke-width="2" stroke-dasharray="6 3" marker-end="url(#ahb)"/>  (blue dashed variant)`;
+━━ PILL — label badge (example box x:110, y:200, w:140, h:34) ━━
+<g id="ID" style="opacity:0">
+  <rect x="110" y="200" width="140" height="34" rx="17" fill="rgba(255,255,255,0.04)" stroke="rgba(255,255,255,0.08)" stroke-width="1"/>
+  <text x="180" y="222" text-anchor="middle" font-size="11" font-weight="500" fill="#a1a1aa">Label Text</text>
+</g>
+
+━━ CONNECTOR — arrow with optional mid-label (between two elements) ━━
+<g id="ID" style="opacity:0">
+  <line x1="258" y1="200" x2="440" y2="200" stroke="rgba(255,255,255,0.1)" stroke-width="1" marker-end="url(#ah)"/>
+  <!-- optional mid label: -->
+  <rect x="324" y="191" width="44" height="18" rx="4" fill="rgba(9,9,11,0.9)" stroke="rgba(255,255,255,0.06)" stroke-width="1"/>
+  <text x="346" y="204" text-anchor="middle" font-size="9" fill="#52525b">label</text>
+</g>
+
+━━ STAT ROW — metric + value (example box x:40, y:180, w:200, h:38) ━━
+<g id="ID" style="opacity:0">
+  <text x="40"  y="195" font-size="10" fill="#52525b">Metric label</text>
+  <text x="240" y="195" text-anchor="end" font-size="10" font-weight="600" fill="#a5b4fc">Value</text>
+  <rect x="40" y="200" width="200" height="1" fill="rgba(255,255,255,0.05)"/>
+  <text x="40"  y="214" font-size="13" font-weight="600" fill="#fafafa">0</text>
+</g>`;
 
 function animatorSystem(sb: Storyboard, i: number, lang: 'en' | 'no'): string {
   const introHere = sb.elements.filter(e => e.introScene === i);
   const plan = sb.scenes[i];
   const boxLines = introHere
-    .map(e => `  • #${e.id} — box x:${e.x} y:${e.y} w:${e.w} h:${e.h} — ${e.desc}`)
+    .map(e => `  • #${e.id} — x:[${e.x}..${e.x + e.w}] y:[${e.y}..${e.y + e.h}] (w:${e.w} h:${e.h}) — ${e.desc}`)
     .join('\n') || '  (none this scene)';
 
   const palette = `
-PALETTE (stay strictly within this — no other colors):
-  bg:       ${sb.bg}
-  surface:  rgba(255,255,255,0.06)   — cards, panels
-  accent:   #6366f1                  — primary (indigo)
-  bright:   #a5b4fc                  — labels, highlights on accent
-  success:  #10b981                  — positive / "correct" state
-  warning:  #f59e0b                  — caution / notable
-  text-hi:  #f1f5f9                  — primary readable text
-  text-lo:  #64748b                  — secondary / muted text
-  stroke:   rgba(255,255,255,0.12)   — borders, grid lines`;
+PALETTE — minimal, luxury dark mode (no other colors):
+  bg:         ${sb.bg}
+  surface:    rgba(255,255,255,0.03–0.05)  — panel/card fill (near-invisible)
+  border:     rgba(255,255,255,0.07–0.10)  — all strokes, 1px only
+  accent:     rgba(99,102,241,…)           — indigo, used on ≤2 elements per scene
+  text-hi:    #fafafa                      — primary text
+  text-mid:   #a1a1aa                      — secondary text
+  text-lo:    #52525b                      — labels, captions
+  accent-txt: #a5b4fc                      — text on accent elements`;
 
   return `You are an SVG motion designer drawing ONE scene of a 5-scene animated explainer. The HTML document, CSS, animation engine and shared <defs> are all provided — you output ONLY this scene's new SVG element groups and its scene-control object.
 
-CANVAS: 800×450 viewBox. Wrap every element in <g id="..."> with style="opacity:0" (the scene logic fades it in).
+CANVAS: 1200×675 viewBox. Wrap every element in <g id="..."> with style="opacity:0" (the scene logic fades it in).
 
-CRITICAL — STAY IN YOUR BOX: each element below has an assigned bounding box {x, y, w, h} (top-left + size). Draw ALL of that element's shapes and text strictly INSIDE its box — nothing may extend past it, or scenes will collide. Size text to fit the box width; wrap long labels onto multiple <text> lines or shorten them. The box position is the element's base for animation.
+CRITICAL — STAY IN YOUR BOX: each element below lists its exact allowed coordinate range. Every x attribute must be within [xMin..xMax] and every y attribute within [yMin..yMax]. No shape, stroke, or text may exceed these bounds — overflow causes visual collisions. Size text to fit within the box width; shorten or split labels across multiple <tspan> or <text> lines rather than letting them run long.
 ${palette}
 ${STYLE_EXAMPLES}
 
 PROVIDED <defs> (reference by id, never redefine):
-  Markers:   url(#ah) white arrowhead, url(#ahb) blue arrowhead
-  Filters:   url(#glow) soft neon, url(#glow-lg) stronger neon — use on hero/focal elements
-             url(#shadow) soft depth on solid cards/panels
-  Gradients: url(#grad-blue) indigo→violet, url(#grad-card) subtle indigo card bg,
-             url(#grad-green) emerald, url(#grad-warm) amber→orange
+  Markers:   url(#ah) subtle white arrowhead, url(#ahb) subtle indigo arrowhead
+  Filters:   url(#glow) — ONE use per scene maximum, on the hero element only
+             url(#shadow) — soft depth, use freely on panels
+  Gradients: url(#grad-accent) indigo tint, url(#grad-surface) near-invisible panel bg
   You MAY add your OWN gradients in a single <defs>…</defs> at the very top of @@@SVG.
+
+MANDATORY QUALITY RULES (no exceptions):
+  1. NO opaque fills. Every shape fill is rgba with opacity ≤ 0.15, OR url(#grad-*).
+  2. EVERY panel/rect/circle must have a 1px stroke at rgba(255,255,255,0.07–0.12).
+  3. url(#glow) appears on AT MOST ONE element per scene — the hero/focal element.
+     url(#glow-lg) is banned entirely.
+  4. Typography hierarchy required: every element with text uses ≥2 sizes or weights
+     (e.g. 9px 500 letter-spaced label + 15px 600 title, or 13px title + 11px body).
+  5. Accent color (indigo) on ≤2 elements per scene. Everything else is neutral.
+  6. Text padding: x-offset from container edge ≥14px. No text touching a border.
+  7. Animations: pop() on ≤1 element per scene. pulse() scale ≤ 1.03. Prefer show()
+     for most reveals — saves pop() for the single most important entrance.
 
 ANIMATION PRIMITIVES (call inside setup):
 ${PRIMITIVES_DOC}
@@ -262,9 +305,10 @@ Scene plan:
 YOUR OUTPUT — EXACTLY these two sections, no markdown, no code fences:
 
 @@@SVG
-Draw rich <g id="..."> groups ONLY for the elements first introduced in THIS scene, each strictly inside its box:
+Draw <g id="..."> groups ONLY for the elements first introduced in THIS scene, each strictly inside its box.
+Base each element on the closest component template above — copy the structure, adapt coordinates and text.
 ${boxLines}
-Apply gradients, glow/shadow filters, and sharp text labels. If this scene introduces no new elements, leave this section empty.
+If this scene introduces no new elements, leave this section empty.
 
 @@@SCENE
 A single JavaScript object literal (starts with { — no "const", no trailing semicolon):
@@ -304,7 +348,7 @@ function resolveOverlaps(sb: Storyboard): void {
   }
   const pairs = [...conflicts].map(p => p.split('|') as [string, string]);
 
-  const GAP = 18, MINX = 24, MINY = 24, MAXX = 776, MAXY = 426;
+  const GAP = 28, MINX = 36, MINY = 36, MAXX = 1164, MAXY = 639;
   for (let iter = 0; iter < 80; iter++) {
     let moved = false;
     for (const [ia, ib] of pairs) {
@@ -423,10 +467,10 @@ function computeFrames(sb: Storyboard): number[][] {
     const maxx = Math.max(...boxes.map(b => b.x + b.w)) + PAD;
     const maxy = Math.max(...boxes.map(b => b.y + b.h)) + PAD;
 
-    const s = Math.max(1, Math.min(MAXZOOM, Math.min(800 / (maxx - minx), 450 / (maxy - miny))));
+    const s = Math.max(1, Math.min(MAXZOOM, Math.min(1200 / (maxx - minx), 675 / (maxy - miny))));
     const cx = (minx + maxx) / 2, cy = (miny + maxy) / 2;
-    const tx = Math.max(800 - 800 * s, Math.min(0, 400 - s * cx));
-    const ty = Math.max(450 - 450 * s, Math.min(0, 225 - s * cy));
+    const tx = Math.max(1200 - 1200 * s, Math.min(0, 600 - s * cx));
+    const ty = Math.max(675 - 675 * s, Math.min(0, 337.5 - s * cy));
     frames.push([Math.round(tx), Math.round(ty), +s.toFixed(3)]);
   }
   return frames;
@@ -436,7 +480,25 @@ export async function generateLesson(query: string, lang: 'en' | 'no' = 'en'): P
   const sb = await direct(query, lang);
   const parts = await Promise.all(sb.scenes.map((_, i) => animateScene(sb, i, lang)));
 
-  const svgBody = parts.map(p => p.svg).filter(Boolean).join('\n');
+  // Elements that are moved by GSAP can't be clip-path constrained (the clip stays
+  // at the original position while the group translates). Connectors are intentionally
+  // allowed to cross other boxes.
+  const movedIds = new Set<string>();
+  sb.scenes.forEach(sc => Object.keys(sc.move ?? {}).forEach(id => movedIds.add(id)));
+
+  const clippable = sb.elements.filter(e => !e.connector && !movedIds.has(e.id));
+
+  const clipDefs = clippable
+    .map(e => `<clipPath id="clip-${e.id}"><rect x="${e.x}" y="${e.y}" width="${e.w}" height="${e.h}"/></clipPath>`)
+    .join('');
+
+  const clippableIds = new Set(clippable.map(e => e.id));
+  const rawSvgBody = parts.map(p => p.svg).filter(Boolean).join('\n');
+  const svgBody = rawSvgBody.replace(
+    /<g\s+id="([^"]+)"/g,
+    (match, id) => clippableIds.has(id) ? `<g id="${id}" clip-path="url(#clip-${id})"` : match
+  );
+
   const scenesText = '[\n' + parts.map(p => p.scene).join(',\n') + '\n]';
   const bg = sb.bg?.startsWith('#') ? sb.bg : '#0a0a1e';
   const chapters = sb.chapters?.length === sb.scenes.length
@@ -448,6 +510,6 @@ export async function generateLesson(query: string, lang: 'en' | 'no' = 'en'): P
     narrations: sb.narrations,
     chapters,
     frames: computeFrames(sb),
-    html: assembleHtml(svgBody, scenesText, bg),
+    html: assembleHtml(svgBody, scenesText, bg, clipDefs),
   };
 }

@@ -265,8 +265,8 @@ export default function App() {
       </div>
 
       {/* Animation */}
-      <div className="flex flex-1 items-center justify-center p-4">
-        <div className="relative aspect-video w-full max-w-[900px] overflow-hidden rounded-2xl border border-white/[0.07] bg-[#0a0a1e] shadow-[0_30px_80px_rgba(0,0,0,0.7)]">
+      <div className="flex flex-1 items-center justify-center px-3 py-2">
+        <div className="relative aspect-video w-full max-w-[1200px] overflow-hidden rounded-2xl border border-white/[0.07] bg-[#0a0a1e] shadow-[0_30px_80px_rgba(0,0,0,0.7)]">
           <iframe
             ref={iframeRef}
             srcDoc={lesson.html}
