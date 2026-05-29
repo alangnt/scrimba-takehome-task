@@ -33,6 +33,7 @@ export default function App() {
   const [paused, setPaused] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [quipIdx, setQuipIdx] = useState(0);
+  const [lang, setLang] = useState<'en' | 'no'>('en');
 
   useEffect(() => {
     if (state !== 'loading' && state !== 'loading-audio') return;
@@ -71,7 +72,7 @@ export default function App() {
     setError(null);
     setState('loading');
     try {
-      const les = await generateLesson(query);
+      const les = await generateLesson(query, lang);
       setLesson(les);
       framesRef.current = les.frames;
       setState('loading-audio');
@@ -163,6 +164,24 @@ export default function App() {
               EduAnimate
             </h1>
             <p className="text-[17px] text-zinc-500">Ask anything. Watch it come alive.</p>
+          </div>
+
+          {/* Language toggle */}
+          <div className="mb-6 flex justify-center">
+            <div className="flex rounded-full border border-white/10 p-1 gap-1">
+              {(['en', 'no'] as const).map((l) => (
+                <button
+                  key={l}
+                  type="button"
+                  onClick={() => setLang(l)}
+                  className={`rounded-full px-4 py-1.5 text-xs font-medium transition ${
+                    lang === l ? 'bg-white text-black' : 'text-zinc-500 hover:text-zinc-300'
+                  }`}
+                >
+                  {l === 'en' ? '🇬🇧 English' : '🇳🇴 Norsk'}
+                </button>
+              ))}
+            </div>
           </div>
 
           <form onSubmit={handleSubmit}>

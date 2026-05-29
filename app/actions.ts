@@ -210,7 +210,7 @@ Connector arrow between two boxes:
   <line x1="SRC_X" y1="SRC_Y" x2="DST_X" y2="DST_Y" stroke="rgba(255,255,255,0.35)" stroke-width="1.5" marker-end="url(#ah)"/>
   <line ... stroke="#60a5fa" stroke-width="2" stroke-dasharray="6 3" marker-end="url(#ahb)"/>  (blue dashed variant)`;
 
-function animatorSystem(sb: Storyboard, i: number): string {
+function animatorSystem(sb: Storyboard, i: number, lang: 'en' | 'no'): string {
   const introHere = sb.elements.filter(e => e.introScene === i);
   const plan = sb.scenes[i];
   const boxLines = introHere
@@ -274,7 +274,7 @@ A single JavaScript object literal (starts with { — no "const", no trailing se
   move: {...},   // the "move" map above
   setup: () => { /* realize the beat with ≥3 primitives: stagger with at(); pop() 1–2 elements for punch; draw()/flow() connections; count() numbers; typewrite() labels; highlight() on key reveals; pulse()/orbit() for continuous life */ }
 }
-Use only element ids that exist in the storyboard.`;
+Use only element ids that exist in the storyboard.${lang === 'no' ? '\n\nLANGUAGE: Write ALL SVG text labels and any visible text in Norwegian Bokmål.' : ''}`;
 }
 
 // Pull the contents of one @@@SECTION out of a model response.
@@ -331,11 +331,14 @@ function resolveOverlaps(sb: Storyboard): void {
   }
 }
 
-async function direct(query: string): Promise<Storyboard> {
+async function direct(query: string, lang: 'en' | 'no'): Promise<Storyboard> {
+  const langLine = lang === 'no'
+    ? ' Write ALL narrations, the title, chapter names, and element descriptions in Norwegian Bokmål.'
+    : '';
   const { text } = await generateText({
     model: anthropic('claude-sonnet-4-6'),
     system: DIRECTOR_PROMPT,
-    prompt: `Plan an animated educational explainer about: "${query}"`,
+    prompt: `Plan an animated educational explainer about: "${query}".${langLine}`,
   });
   const json = text.slice(text.indexOf('{'), text.lastIndexOf('}') + 1);
   const sb = JSON.parse(json) as Storyboard;
@@ -356,11 +359,11 @@ function countAnimCalls(scene: string): number {
   return (scene.match(/\b(pop|draw|count|pulse|orbit|flow|recolor|typewrite|highlight|shake|at)\s*\(/g) ?? []).length;
 }
 
-async function animateScene(sb: Storyboard, i: number): Promise<{ svg: string; scene: string }> {
+async function animateScene(sb: Storyboard, i: number, lang: 'en' | 'no'): Promise<{ svg: string; scene: string }> {
   const run = async () => {
     const { text } = await generateText({
       model: anthropic('claude-sonnet-4-6'),
-      system: animatorSystem(sb, i),
+      system: animatorSystem(sb, i, lang),
       prompt: `Draw scene ${i + 1}.`,
     });
     const svg = stripFences(section(text, 'SVG'));
@@ -378,7 +381,7 @@ async function animateScene(sb: Storyboard, i: number): Promise<{ svg: string; s
       try {
         const { text } = await generateText({
           model: anthropic('claude-sonnet-4-6'),
-          system: animatorSystem(sb, i),
+          system: animatorSystem(sb, i, lang),
           prompt: `Draw scene ${i + 1}. The previous attempt was visually flat — use at least 4 animation primitives in setup: stagger reveals with at(), pop() entering elements, add a continuous loop (pulse/orbit/flow), and typewrite or highlight the key element.`,
         });
         const svg2 = stripFences(section(text, 'SVG'));
@@ -429,9 +432,9 @@ function computeFrames(sb: Storyboard): number[][] {
   return frames;
 }
 
-export async function generateLesson(query: string): Promise<Lesson> {
-  const sb = await direct(query);
-  const parts = await Promise.all(sb.scenes.map((_, i) => animateScene(sb, i)));
+export async function generateLesson(query: string, lang: 'en' | 'no' = 'en'): Promise<Lesson> {
+  const sb = await direct(query, lang);
+  const parts = await Promise.all(sb.scenes.map((_, i) => animateScene(sb, i, lang)));
 
   const svgBody = parts.map(p => p.svg).filter(Boolean).join('\n');
   const scenesText = '[\n' + parts.map(p => p.scene).join(',\n') + '\n]';
