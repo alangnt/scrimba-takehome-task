@@ -177,7 +177,7 @@ export default function App() {
   /* ── LOADING ── */
   if (state === 'loading' || state === 'loading-audio') {
     const label = state === 'loading' ? 'Generating your lesson…' : 'Preparing audio…';
-    const sublabel = state === 'loading' ? 'Storyboarding, then animating all scenes in parallel' : 'Synthesising narration with OpenAI TTS';
+    const sublabel = state === 'loading' ? 'Storyboarding, then animating all scenes in parallel' : 'Synthesising narration with ElevenLabs';
     return (
       <main className="flex min-h-screen flex-col items-center justify-center">
         <div className="mb-5 flex gap-2.5">
@@ -251,7 +251,7 @@ export default function App() {
         </p>
 
         {/* Chapter summary — click any chapter to jump straight to it */}
-        <div className="mx-auto flex max-w-3xl items-stretch gap-2">
+        <div className="mx-auto flex flex-col md:flex-row max-w-3xl items-stretch gap-2">
           {lesson.chapters.map((c, i) => {
             const active = i === sceneIdx && state !== 'ready';
             const visited = i < sceneIdx && state !== 'ready';
