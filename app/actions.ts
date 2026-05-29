@@ -20,20 +20,20 @@ let _scene=-1,_timers=[],_fast=false,_init=null;
 const $=id=>document.getElementById(id);
 gsap.defaults({transformOrigin:'50% 50%'});
 const D=d=>_fast?0:d;
-const mv=(id,dx,dy)=>{const e=$(id);if(e)gsap.to(e,{x:dx,y:dy,duration:D(.9),ease:'back.out(1.4)'})};
-const show=(id,d)=>{const e=$(id);if(e)gsap.to(e,{opacity:1,duration:D(d||.55),ease:'power2.out'})};
-const hide=(id,d)=>{const e=$(id);if(e)gsap.to(e,{opacity:0,duration:D(d||.4),ease:'power2.in'})};
-const recolor=(id,c)=>{const e=$(id);if(e)gsap.to(e,{fill:c,duration:D(.5)})};
-const pulse=(id,s,p)=>{const e=$(id);if(e)gsap.to(e,{scale:s||1.15,duration:(p||1.6)/2,repeat:-1,yoyo:true,ease:'sine.inOut'})};
-const orbit=(id,r,p)=>{const e=$(id);if(e)gsap.to(e,{rotation:360,duration:p||3,repeat:-1,ease:'none',transformOrigin:'-'+(r||70)+'px 50%'})};
-const flow=(id,len,p)=>{const e=$(id);if(e){gsap.set(e,{strokeDasharray:len||300});gsap.fromTo(e,{strokeDashoffset:len||300},{strokeDashoffset:0,duration:p||2,repeat:-1,ease:'none'})}};
-const pop=(id,d)=>{const e=$(id);if(e)gsap.fromTo(e,{scale:0,opacity:1},{scale:1,duration:D(d||.6),ease:'back.out(1.7)'})};
+const mv=(id,dx,dy)=>{const e=$(id);if(e)gsap.to(e,{x:dx,y:dy,duration:D(.7),ease:'power2.inOut'})};
+const show=(id,d)=>{const e=$(id);if(e)gsap.to(e,{opacity:1,duration:D(d||.45),ease:'sine.out'})};
+const hide=(id,d)=>{const e=$(id);if(e)gsap.to(e,{opacity:0,duration:D(d||.3),ease:'sine.in'})};
+const recolor=(id,c)=>{const e=$(id);if(e)gsap.to(e,{fill:c,duration:D(.4)})};
+const pulse=(id,s,p)=>{const e=$(id);if(e)gsap.to(e,{scale:s||1.04,duration:(p||3)/2,repeat:-1,yoyo:true,ease:'sine.inOut'})};
+const orbit=(id,r,p)=>{const e=$(id);if(e)gsap.to(e,{rotation:360,duration:p||5,repeat:-1,ease:'none',transformOrigin:'-'+(r||70)+'px 50%'})};
+const flow=(id,len,p)=>{const e=$(id);if(e){gsap.set(e,{strokeDasharray:len||300});gsap.fromTo(e,{strokeDashoffset:len||300},{strokeDashoffset:0,duration:p||2.4,repeat:-1,ease:'none'})}};
+const pop=(id,d)=>{const e=$(id);if(e)gsap.fromTo(e,{scale:.95,opacity:0},{scale:1,opacity:1,duration:D(d||.45),ease:'power2.out'})};
 const draw=(id,d,len)=>{const e=$(id);if(e){gsap.set(e,{opacity:1,strokeDasharray:len||400});gsap.fromTo(e,{strokeDashoffset:len||400},{strokeDashoffset:0,duration:D(d||1.5),ease:'power1.inOut'})}};
 const count=(id,to,d)=>{const e=$(id);if(e){gsap.set(e,{opacity:1});const o={v:0};gsap.to(o,{v:to,duration:D(d||1.5),ease:'power1.out',onUpdate:()=>{e.textContent=Math.round(o.v)}})}};
 const stopAnim=id=>{const e=$(id);if(e)gsap.killTweensOf(e)};
 const at=(t,fn)=>{if(_fast){fn();return}const id=setTimeout(fn,t*1e3);_timers.push(id);return id};
 // Camera: glide the whole canvas to frame the active scene [tx, ty, scale]
-const cam=t=>{const g=$('cam');if(!g||!t)return;gsap.to(g,{x:t[0],y:t[1],scale:t[2],transformOrigin:'0 0',duration:_fast?0:1.3,ease:'power2.inOut'})};
+const cam=t=>{const g=$('cam');if(!g||!t)return;gsap.to(g,{x:t[0],y:t[1],scale:t[2],transformOrigin:'0 0',duration:_fast?0:0.65,ease:'power2.inOut'})};
 
 // Snapshot each group's authored visibility at load, so we can rebuild from scratch
 function snap(){_init={};document.querySelectorAll('g[id]').forEach(e=>{_init[e.id]=getComputedStyle(e).opacity})}
@@ -49,7 +49,7 @@ function goToScene(idx){
   _timers.forEach(clearTimeout);_timers=[];
   const s=SCENES[idx];
   // Staggered entrance for a polished scene transition (instant when seeking)
-  (s.show||[]).forEach((id,i)=>{const e=$(id);if(e)gsap.to(e,{opacity:1,duration:D(.55),delay:_fast?0:i*.08,ease:'power2.out'})});
+  (s.show||[]).forEach((id,i)=>{const e=$(id);if(e)gsap.to(e,{opacity:1,duration:D(.4),delay:_fast?0:i*.04,ease:'sine.out'})});
   (s.hide||[]).forEach(id=>hide(id));
   Object.entries(s.move||{}).forEach(([id,d])=>mv(id,d[0],d[1]));
   if(s.setup)at(.35,s.setup);
