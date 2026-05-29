@@ -15,21 +15,26 @@ export default function App() {
   const [state, setState] = useState<AppState>('idle');
   const [lesson, setLesson] = useState<Lesson | null>(null);
   const [sceneIdx, setSceneIdx] = useState(0);
+  const [paused, setPaused] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   // Refs so playScene closure never goes stale
   const audioUrlsRef = useRef<string[]>([]);
+  const framesRef = useRef<number[][]>([]);
   const totalRef = useRef(0);
+
+  const post = (msg: object) => iframeRef.current?.contentWindow?.postMessage(msg, '*');
 
   function playScene(idx: number) {
     if (idx >= totalRef.current) {
       setState('finished');
       return;
     }
-    iframeRef.current?.contentWindow?.postMessage({ type: 'goto', index: idx }, '*');
+    post({ type: 'goto', index: idx, cam: framesRef.current[idx] });
     setSceneIdx(idx);
+    setPaused(false);
     const audio = new Audio(audioUrlsRef.current[idx]);
     audioRef.current = audio;
     audio.onended = () => playScene(idx + 1);
@@ -46,6 +51,7 @@ export default function App() {
     try {
       const les = await generateLesson(query);
       setLesson(les);
+      framesRef.current = les.frames;
       setState('loading-audio');
       const urls = await generateTTS(les.narrations);
       audioUrlsRef.current = urls;
@@ -71,9 +77,10 @@ export default function App() {
       setState('finished');
       return;
     }
-    iframeRef.current?.contentWindow?.postMessage({ type: 'seek', index: target }, '*');
+    post({ type: 'seek', index: target, cam: framesRef.current[target] });
     setSceneIdx(target);
     setState('playing');
+    setPaused(false);
     const audio = new Audio(audioUrlsRef.current[target]);
     audioRef.current = audio;
     audio.onended = () => playScene(target + 1);
@@ -81,14 +88,29 @@ export default function App() {
     audio.play();
   }
 
+  // Pause/resume audio and the animation timeline together
+  const togglePause = () => {
+    if (paused) {
+      audioRef.current?.play();
+      post({ type: 'resume' });
+      setPaused(false);
+    } else {
+      audioRef.current?.pause();
+      post({ type: 'pause' });
+      setPaused(true);
+    }
+  };
+
   const reset = () => {
     audioRef.current?.pause();
     audioRef.current = null;
     audioUrlsRef.current = [];
+    framesRef.current = [];
     totalRef.current = 0;
     setState('idle');
     setLesson(null);
     setSceneIdx(0);
+    setPaused(false);
   };
 
   const totalScenes = lesson?.narrations.length ?? 5;
@@ -218,6 +240,7 @@ export default function App() {
               </button>
             </div>
           )}
+
         </div>
       </div>
 
@@ -227,78 +250,84 @@ export default function App() {
           {state !== 'ready' ? narration : ''}
         </p>
 
-        <div className="flex items-center justify-center gap-3">
-          {state !== 'ready' && (
-            <>
-              <button
-                onClick={() => jumpTo(0)}
-                aria-label="Replay from start"
-                className="grid h-8 w-8 place-items-center rounded-lg text-zinc-500 transition hover:bg-white/[0.06] hover:text-white"
-              >
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M3 12a9 9 0 1 0 9-9 9 9 0 0 0-6.36 2.64L3 8" />
-                  <path d="M3 3v5h5" />
-                </svg>
-              </button>
-              <button
-                onClick={() => jumpTo(sceneIdx - 1)}
-                disabled={sceneIdx === 0}
-                aria-label="Previous scene"
-                className="grid h-8 w-8 place-items-center rounded-lg text-zinc-500 transition hover:bg-white/[0.06] hover:text-white disabled:pointer-events-none disabled:opacity-25"
-              >
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M15 18l-6-6 6-6" />
-                </svg>
-              </button>
-            </>
-          )}
-
-          <div className="flex items-center gap-1.5">
-            {Array.from({ length: totalScenes }).map((_, i) => (
+        {/* Chapter summary — click any chapter to jump straight to it */}
+        <div className="mx-auto flex max-w-3xl items-stretch gap-2">
+          {lesson.chapters.map((c, i) => {
+            const active = i === sceneIdx && state !== 'ready';
+            const visited = i < sceneIdx && state !== 'ready';
+            return (
               <button
                 key={i}
                 onClick={() => jumpTo(i)}
-                disabled={state === 'ready'}
-                aria-label={`Go to scene ${i + 1}`}
-                className="group -my-2 py-2 disabled:pointer-events-none"
+                aria-label={`Chapter ${i + 1}: ${c}`}
+                className={`group relative flex-1 rounded-xl border px-3 py-2.5 text-left transition ${
+                  active
+                    ? 'border-indigo-500/60 bg-indigo-500/10'
+                    : 'border-white/[0.07] hover:border-white/20 hover:bg-white/[0.03]'
+                }`}
               >
-                <span
-                  className={`block h-1.5 rounded-full transition-all duration-300 group-hover:bg-indigo-400 ${
-                    i === sceneIdx ? 'w-5' : 'w-1.5'
-                  } ${i <= sceneIdx && state !== 'ready' ? 'bg-indigo-500' : 'bg-white/15'}`}
-                />
+                <div
+                  className={`text-[10px] font-semibold tabular-nums tracking-wider transition-colors ${
+                    active ? 'text-indigo-300' : visited ? 'text-zinc-500' : 'text-zinc-600'
+                  }`}
+                >
+                  Chapter {String(i + 1).padStart(2, '0')}
+                </div>
+                <div
+                  className={`mt-0.5 text-[12.5px] font-medium leading-tight transition-colors ${
+                    active ? 'text-white' : visited ? 'text-zinc-300' : 'text-zinc-500 group-hover:text-zinc-300'
+                  }`}
+                >
+                  {c}
+                </div>
               </button>
-            ))}
-          </div>
+            );
+          })}
+        </div>
 
+        {/* Transport */}
+        <div className="mt-4 flex items-center justify-center gap-3">
           {state !== 'ready' && (
             <button
-              onClick={() => jumpTo(sceneIdx + 1)}
-              disabled={sceneIdx >= totalScenes - 1}
-              aria-label="Next scene"
-              className="grid h-8 w-8 place-items-center rounded-lg text-zinc-500 transition hover:bg-white/[0.06] hover:text-white disabled:pointer-events-none disabled:opacity-25"
+              onClick={() => jumpTo(0)}
+              aria-label="Replay from start"
+              className="grid h-9 w-9 place-items-center rounded-lg text-zinc-500 transition hover:bg-white/[0.06] hover:text-white"
             >
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M9 18l6-6-6-6" />
+                <path d="M3 12a9 9 0 1 0 9-9 9 9 0 0 0-6.36 2.64L3 8" />
+                <path d="M3 3v5h5" />
               </svg>
             </button>
           )}
-        </div>
 
-        {state === 'finished' && (
-          <div className="mt-3 flex justify-center">
+          {state === 'playing' && (
+            <button
+              onClick={togglePause}
+              aria-label={paused ? 'Resume' : 'Pause'}
+              className="grid h-9 w-9 place-items-center rounded-full bg-white text-black transition hover:scale-105 active:scale-95"
+            >
+              {paused ? (
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" className="ml-0.5">
+                  <path d="M8 5v14l11-7z" />
+                </svg>
+              ) : (
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor">
+                  <rect x="6" y="5" width="4" height="14" rx="1" />
+                  <rect x="14" y="5" width="4" height="14" rx="1" />
+                </svg>
+              )}
+            </button>
+          )}
+
+          {state === 'finished' && (
             <button
               onClick={reset}
               className="rounded-lg bg-white px-4 py-1.5 text-[13px] font-medium text-black transition hover:bg-zinc-200 active:scale-[0.98]"
             >
               New query
             </button>
-          </div>
-        )}
-
-        <p className="mt-2 text-center text-[11px] text-zinc-700">
-          {state === 'ready' ? 'Ready' : `${sceneIdx + 1} / ${totalScenes}${state === 'finished' ? ' · Complete' : ''}`}
-        </p>
+          )}
+        </div>
       </div>
     </main>
   );

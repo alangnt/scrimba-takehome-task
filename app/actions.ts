@@ -7,6 +7,8 @@ import OpenAI from 'openai';
 export interface Lesson {
   title: string;
   narrations: string[];
+  chapters: string[];          // short chapter title per scene
+  frames: number[][];          // per-scene camera framing [tx, ty, scale]
   html: string;
 }
 
@@ -30,6 +32,8 @@ const draw=(id,d,len)=>{const e=$(id);if(e){gsap.set(e,{opacity:1,strokeDasharra
 const count=(id,to,d)=>{const e=$(id);if(e){gsap.set(e,{opacity:1});const o={v:0};gsap.to(o,{v:to,duration:D(d||1.5),ease:'power1.out',onUpdate:()=>{e.textContent=Math.round(o.v)}})}};
 const stopAnim=id=>{const e=$(id);if(e)gsap.killTweensOf(e)};
 const at=(t,fn)=>{if(_fast){fn();return}const id=setTimeout(fn,t*1e3);_timers.push(id);return id};
+// Camera: glide the whole canvas to frame the active scene [tx, ty, scale]
+const cam=t=>{const g=$('cam');if(!g||!t)return;gsap.to(g,{x:t[0],y:t[1],scale:t[2],transformOrigin:'0 0',duration:_fast?0:1.3,ease:'power2.inOut'})};
 
 // Snapshot each group's authored visibility at load, so we can rebuild from scratch
 function snap(){_init={};document.querySelectorAll('g[id]').forEach(e=>{_init[e.id]=getComputedStyle(e).opacity})}
@@ -64,8 +68,10 @@ function seekScene(idx){
 
 window.addEventListener('message',e=>{
   const d=e.data||{};
-  if(d.type==='goto')goToScene(d.index);
-  else if(d.type==='seek')seekScene(d.index);
+  if(d.type==='goto'){gsap.globalTimeline.resume();goToScene(d.index);cam(d.cam)}
+  else if(d.type==='seek'){gsap.globalTimeline.resume();seekScene(d.index);cam(d.cam)}
+  else if(d.type==='pause')gsap.globalTimeline.pause();
+  else if(d.type==='resume')gsap.globalTimeline.resume();
 });
 `;
 
@@ -95,7 +101,9 @@ function assembleHtml(svgBody: string, scenes: string, bg: string): string {
 <body style="background:${bg}">
 <svg viewBox="0 0 800 450" xmlns="http://www.w3.org/2000/svg">
 <defs>${DEFS}</defs>
+<g id="cam">
 ${svgBody}
+</g>
 </svg>
 <script>const SCENES=${scenes};</script>
 </body></html>`;
@@ -123,6 +131,7 @@ interface Storyboard {
   title: string;
   bg: string;
   narrations: string[];
+  chapters: string[];          // short 2–4 word chapter title per scene
   elements: SceneElement[];
   scenes: ScenePlan[];
 }
@@ -136,6 +145,7 @@ Return STRICT JSON only (no markdown, no comments, no trailing commas):
   "title": "concise lesson title",
   "bg": "#0a1628",
   "narrations": ["scene 1", "scene 2", "scene 3", "scene 4", "scene 5"],
+  "chapters": ["The Setup", "First Clue", "...", "...", "The Payoff"],
   "elements": [
     { "id": "kebab-case-id", "introScene": 0, "x": 60, "y": 180, "w": 180, "h": 90, "desc": "what it is + visual style: shapes, color, label, whether it glows or casts a shadow" }
   ],
@@ -153,7 +163,8 @@ LAYOUT RULES (most important):
 - move deltas are pixels from the box's position; after moving, the box must still be on-canvas and not collide with other on-screen boxes.
 
 CONTENT RULES:
-- EXACTLY 5 narrations and 5 scenes. Narrations: conversational and vivid, a hook in scene 1, a payoff in scene 5, ~1–2 sentences each.
+- EXACTLY 5 narrations, 5 chapters and 5 scenes. Narrations: conversational and vivid, a hook in scene 1, a payoff in scene 5, ~1–2 sentences each.
+- chapters: a punchy 2–4 word title for each scene, like documentary chapter cards (e.g. "Down the Rabbit Hole", "When Things Collide").
 - 8–12 elements total. Each element's introScene is the scene it first enters; that scene's "enter" array must include it.
 - ≥3 elements persist across 2+ scenes and MOVE (shared elements drifting = the "video" feel). Pick one hero element that travels across the canvas over the 5 scenes.
 - Illustrate the concept literally and meaningfully — never abstract decoration.
@@ -308,6 +319,39 @@ async function animateScene(sb: Storyboard, i: number): Promise<{ svg: string; s
   }
 }
 
+// Per-scene camera framing (pure compute): frame the elements visible in each
+// scene with padding and a gentle zoom, so the "lens" follows the action.
+function computeFrames(sb: Storyboard): number[][] {
+  const pos = new Map(sb.elements.map(e => [e.id, { x: e.x, y: e.y, w: e.w, h: e.h }]));
+  const visible = new Set<string>();
+  const frames: number[][] = [];
+  const PAD = 70, MAXZOOM = 1.4;
+
+  for (const sc of sb.scenes) {
+    (sc.enter ?? []).forEach(id => visible.add(id));
+    (sc.exit ?? []).forEach(id => visible.delete(id));
+    Object.entries(sc.move ?? {}).forEach(([id, d]) => {
+      const p = pos.get(id);
+      if (p) { p.x += d[0]; p.y += d[1]; }
+    });
+
+    const boxes = [...visible].map(id => pos.get(id)).filter(Boolean) as { x: number; y: number; w: number; h: number }[];
+    if (!boxes.length) { frames.push([0, 0, 1]); continue; }
+
+    const minx = Math.min(...boxes.map(b => b.x)) - PAD;
+    const miny = Math.min(...boxes.map(b => b.y)) - PAD;
+    const maxx = Math.max(...boxes.map(b => b.x + b.w)) + PAD;
+    const maxy = Math.max(...boxes.map(b => b.y + b.h)) + PAD;
+
+    const s = Math.max(1, Math.min(MAXZOOM, Math.min(800 / (maxx - minx), 450 / (maxy - miny))));
+    const cx = (minx + maxx) / 2, cy = (miny + maxy) / 2;
+    const tx = Math.max(800 - 800 * s, Math.min(0, 400 - s * cx));
+    const ty = Math.max(450 - 450 * s, Math.min(0, 225 - s * cy));
+    frames.push([Math.round(tx), Math.round(ty), +s.toFixed(3)]);
+  }
+  return frames;
+}
+
 export async function generateLesson(query: string): Promise<Lesson> {
   const sb = await direct(query);
   const parts = await Promise.all(sb.scenes.map((_, i) => animateScene(sb, i)));
@@ -315,10 +359,15 @@ export async function generateLesson(query: string): Promise<Lesson> {
   const svgBody = parts.map(p => p.svg).filter(Boolean).join('\n');
   const scenesText = '[\n' + parts.map(p => p.scene).join(',\n') + '\n]';
   const bg = sb.bg?.startsWith('#') ? sb.bg : '#0a0a1e';
+  const chapters = sb.chapters?.length === sb.scenes.length
+    ? sb.chapters
+    : sb.scenes.map((_, i) => `Chapter ${i + 1}`);
 
   return {
     title: sb.title || 'Lesson',
     narrations: sb.narrations,
+    chapters,
+    frames: computeFrames(sb),
     html: assembleHtml(svgBody, scenesText, bg),
   };
 }
