@@ -8,7 +8,7 @@ type AppState = 'idle' | 'loading' | 'loading-audio' | 'ready' | 'playing' | 'fi
 const EXAMPLES = [
   'Why is the sky blue?',
   'How does the Norwegian parliament work?',
-  "What's the difference between a hash map and a B-tree?",
+  "Hash map vs. B-tree",
 ];
 
 export default function App() {
@@ -63,6 +63,24 @@ export default function App() {
     playScene(0);
   };
 
+  // Jump to any scene: rebuild the animation state, then play that scene's audio
+  function jumpTo(idx: number) {
+    const target = Math.max(0, idx);
+    audioRef.current?.pause();
+    if (target >= totalRef.current) {
+      setState('finished');
+      return;
+    }
+    iframeRef.current?.contentWindow?.postMessage({ type: 'seek', index: target }, '*');
+    setSceneIdx(target);
+    setState('playing');
+    const audio = new Audio(audioUrlsRef.current[target]);
+    audioRef.current = audio;
+    audio.onended = () => playScene(target + 1);
+    audio.onerror = () => playScene(target + 1);
+    audio.play();
+  }
+
   const reset = () => {
     audioRef.current?.pause();
     audioRef.current = null;
@@ -80,50 +98,56 @@ export default function App() {
   /* ── IDLE ── */
   if (state === 'idle') {
     return (
-      <main style={{ minHeight: '100vh', background: '#08080f', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '24px', color: 'white' }}>
-        <div style={{ textAlign: 'center', marginBottom: '44px' }}>
-          <h1 style={{
-            fontSize: '54px', fontWeight: 800, marginBottom: '12px', letterSpacing: '-1.5px',
-            background: 'linear-gradient(135deg, #60a5fa 0%, #a78bfa 100%)',
-            WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
-          }}>
-            EduAnimate
-          </h1>
-          <p style={{ color: '#4b5563', fontSize: '17px' }}>Ask anything. Watch it come alive.</p>
-        </div>
+      <main className="relative flex min-h-screen flex-col items-center justify-center overflow-hidden px-6">
+        {/* Ambient glow */}
+        <div
+          aria-hidden
+          className="pointer-events-none absolute -top-44 left-1/2 h-[460px] w-[680px] -translate-x-1/2 rounded-full bg-[radial-gradient(circle,rgba(99,102,241,0.22),transparent_70%)] blur-3xl"
+          style={{ animation: 'glow-pulse 7s ease-in-out infinite' }}
+        />
 
-        <form onSubmit={handleSubmit} style={{ width: '100%', maxWidth: '600px' }}>
-          <div style={{ display: 'flex', gap: '8px' }}>
-            <input
-              ref={inputRef}
-              type="text"
-              name="query"
-              placeholder="Why is the sky blue?"
-              autoFocus
-              style={{
-                flex: 1, borderRadius: '14px', padding: '14px 20px',
-                background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.12)',
-                color: 'white', fontSize: '16px', outline: 'none',
-              }}
-            />
-            <button type="submit" style={{ borderRadius: '14px', padding: '14px 24px', background: '#2563eb', color: 'white', fontWeight: 600, fontSize: '16px', border: 'none', cursor: 'pointer', whiteSpace: 'nowrap' }}>
-              Generate →
-            </button>
+        <div className="relative w-full max-w-xl" style={{ animation: 'fade-up 0.6s ease both' }}>
+          <div className="mb-11 text-center">
+            <h1 className="mb-3 bg-gradient-to-b from-white to-zinc-500 bg-clip-text text-[56px] font-bold leading-none tracking-tight text-transparent">
+              EduAnimate
+            </h1>
+            <p className="text-[17px] text-zinc-500">Ask anything. Watch it come alive.</p>
           </div>
 
-          {error && <p style={{ color: '#f87171', fontSize: '14px', marginTop: '8px', textAlign: 'center' }}>{error}</p>}
-
-          <div style={{ marginTop: '20px', display: 'flex', flexWrap: 'wrap', gap: '8px', justifyContent: 'center' }}>
-            {EXAMPLES.map(q => (
-              <button key={q} type="button"
-                onClick={() => { if (inputRef.current) inputRef.current.value = q; }}
-                style={{ fontSize: '12px', borderRadius: '100px', padding: '6px 14px', cursor: 'pointer', background: 'transparent', border: '1px solid rgba(255,255,255,0.1)', color: '#6b7280' }}
+          <form onSubmit={handleSubmit}>
+            <div className="flex gap-2">
+              <input
+                ref={inputRef}
+                type="text"
+                name="query"
+                placeholder="Why is the sky blue?"
+                autoFocus
+                className="flex-1 rounded-xl border border-white/10 bg-white/[0.03] px-5 py-3.5 text-[15px] text-white outline-none transition placeholder:text-zinc-600 focus:border-white/25 focus:bg-white/[0.05] focus:ring-4 focus:ring-white/5"
+              />
+              <button
+                type="submit"
+                className="rounded-xl bg-white px-6 py-3.5 text-[15px] font-medium text-black transition hover:bg-zinc-200 active:scale-[0.98]"
               >
-                {q}
+                Generate →
               </button>
-            ))}
-          </div>
-        </form>
+            </div>
+
+            {error && <p className="mt-2.5 text-center text-sm text-red-400">{error}</p>}
+
+            <div className="mt-5 flex flex-wrap justify-center gap-2">
+              {EXAMPLES.map(q => (
+                <button
+                  key={q}
+                  type="button"
+                  onClick={() => { if (inputRef.current) inputRef.current.value = q; }}
+                  className="rounded-full border border-white/10 px-3.5 py-1.5 text-xs text-zinc-500 transition hover:border-white/25 hover:text-zinc-300"
+                >
+                  {q}
+                </button>
+              ))}
+            </div>
+          </form>
+        </div>
       </main>
     );
   }
@@ -131,17 +155,20 @@ export default function App() {
   /* ── LOADING ── */
   if (state === 'loading' || state === 'loading-audio') {
     const label = state === 'loading' ? 'Generating your lesson…' : 'Preparing audio…';
-    const sublabel = state === 'loading' ? 'Usually takes 15–25 seconds' : 'Synthesising narration with OpenAI TTS';
+    const sublabel = state === 'loading' ? 'Storyboarding, then animating all scenes in parallel' : 'Synthesising narration with OpenAI TTS';
     return (
-      <main style={{ minHeight: '100vh', background: '#08080f', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: 'white' }}>
-        <div style={{ display: 'flex', gap: '10px', marginBottom: '20px' }}>
+      <main className="flex min-h-screen flex-col items-center justify-center">
+        <div className="mb-5 flex gap-2.5">
           {[0, 1, 2].map(i => (
-            <div key={i} style={{ width: '10px', height: '10px', borderRadius: '50%', background: '#60a5fa', animation: 'bounce 1s ease-in-out infinite', animationDelay: `${i * 0.15}s` }} />
+            <div
+              key={i}
+              className="h-2.5 w-2.5 rounded-full bg-zinc-400"
+              style={{ animation: 'bounce-dot 1s ease-in-out infinite', animationDelay: `${i * 0.15}s` }}
+            />
           ))}
         </div>
-        <p style={{ color: '#9ca3af', fontSize: '16px' }}>{label}</p>
-        <p style={{ color: '#374151', fontSize: '13px', marginTop: '6px' }}>{sublabel}</p>
-        <style>{`@keyframes bounce{0%,100%{transform:translateY(0)}50%{transform:translateY(-12px)}}`}</style>
+        <p className="text-base text-zinc-400">{label}</p>
+        <p className="mt-1.5 text-[13px] text-zinc-600">{sublabel}</p>
       </main>
     );
   }
@@ -150,58 +177,44 @@ export default function App() {
 
   /* ── PLAYER (ready / playing / finished) ── */
   return (
-    <main style={{ minHeight: '100vh', background: '#08080f', display: 'flex', flexDirection: 'column', color: 'white' }}>
+    <main className="flex min-h-screen flex-col">
       {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 20px', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
-        <h2 style={{ fontSize: '13px', fontWeight: 600, color: '#94a3b8', maxWidth: '500px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-          {lesson.title}
-        </h2>
-        <button onClick={reset} style={{ fontSize: '12px', color: '#4b5563', background: 'none', border: 'none', cursor: 'pointer' }}>
+      <header className="flex items-center justify-between border-b border-white/[0.06] px-5 py-3">
+        <h2 className="max-w-md truncate text-[13px] font-medium text-zinc-400">{lesson.title}</h2>
+        <button onClick={reset} className="text-xs text-zinc-600 transition hover:text-zinc-300">
           ← New query
         </button>
-      </div>
+      </header>
 
       {/* Progress bar */}
-      <div style={{ height: '2px', background: 'rgba(255,255,255,0.06)' }}>
-        <div style={{ height: '100%', background: 'linear-gradient(90deg, #3b82f6, #818cf8)', transition: 'width 0.9s ease', width: `${progress}%` }} />
+      <div className="h-px bg-white/[0.06]">
+        <div
+          className="h-full bg-gradient-to-r from-indigo-500 to-violet-500 transition-[width] duration-700 ease-out"
+          style={{ width: `${progress}%` }}
+        />
       </div>
 
       {/* Animation */}
-      <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px' }}>
-        <div style={{
-          position: 'relative',
-          width: '100%', maxWidth: '900px', aspectRatio: '16/9',
-          borderRadius: '16px', overflow: 'hidden',
-          border: '1px solid rgba(255,255,255,0.07)',
-          boxShadow: '0 30px 80px rgba(0,0,0,0.7)',
-          background: '#0a0a1e',
-        }}>
+      <div className="flex flex-1 items-center justify-center p-4">
+        <div className="relative aspect-video w-full max-w-[900px] overflow-hidden rounded-2xl border border-white/[0.07] bg-[#0a0a1e] shadow-[0_30px_80px_rgba(0,0,0,0.7)]">
           <iframe
             ref={iframeRef}
             srcDoc={lesson.html}
-            style={{ width: '100%', height: '100%', border: 'none', display: 'block' }}
+            className="block h-full w-full border-none"
             sandbox="allow-scripts"
             title="Lesson"
           />
           {/* Play overlay — shown only in 'ready' state */}
           {state === 'ready' && (
-            <div style={{
-              position: 'absolute', inset: 0,
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              background: 'rgba(0,0,0,0.55)',
-            }}>
+            <div className="absolute inset-0 grid place-items-center bg-black/50 backdrop-blur-sm">
               <button
                 onClick={handlePlay}
-                style={{
-                  width: '72px', height: '72px', borderRadius: '50%',
-                  background: '#2563eb', border: 'none', cursor: 'pointer',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  fontSize: '26px', color: 'white',
-                  boxShadow: '0 0 0 8px rgba(37,99,235,0.25)',
-                  transition: 'transform 0.15s',
-                }}
+                className="grid h-16 w-16 place-items-center rounded-full bg-white text-black shadow-[0_0_0_8px_rgba(255,255,255,0.12)] transition hover:scale-105 active:scale-95"
+                aria-label="Play lesson"
               >
-                ▶
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor" className="ml-0.5">
+                  <path d="M8 5v14l11-7z" />
+                </svg>
               </button>
             </div>
           )}
@@ -209,34 +222,81 @@ export default function App() {
       </div>
 
       {/* Bottom bar */}
-      <div style={{ padding: '12px 24px 18px', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
-        <p style={{
-          textAlign: 'center', fontSize: '14px', lineHeight: '1.65', color: '#94a3b8',
-          maxWidth: '620px', margin: '0 auto 12px', minHeight: '46px',
-          transition: 'opacity 0.4s ease',
-        }}>
+      <div className="border-t border-white/[0.06] px-6 pb-5 pt-3">
+        <p className="mx-auto mb-3 min-h-[44px] max-w-2xl text-center text-sm leading-relaxed text-zinc-400 transition-opacity duration-300">
           {state !== 'ready' ? narration : ''}
         </p>
 
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '16px' }}>
-          <div style={{ display: 'flex', gap: '5px', alignItems: 'center' }}>
+        <div className="flex items-center justify-center gap-3">
+          {state !== 'ready' && (
+            <>
+              <button
+                onClick={() => jumpTo(0)}
+                aria-label="Replay from start"
+                className="grid h-8 w-8 place-items-center rounded-lg text-zinc-500 transition hover:bg-white/[0.06] hover:text-white"
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M3 12a9 9 0 1 0 9-9 9 9 0 0 0-6.36 2.64L3 8" />
+                  <path d="M3 3v5h5" />
+                </svg>
+              </button>
+              <button
+                onClick={() => jumpTo(sceneIdx - 1)}
+                disabled={sceneIdx === 0}
+                aria-label="Previous scene"
+                className="grid h-8 w-8 place-items-center rounded-lg text-zinc-500 transition hover:bg-white/[0.06] hover:text-white disabled:pointer-events-none disabled:opacity-25"
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M15 18l-6-6 6-6" />
+                </svg>
+              </button>
+            </>
+          )}
+
+          <div className="flex items-center gap-1.5">
             {Array.from({ length: totalScenes }).map((_, i) => (
-              <div key={i} style={{
-                height: '5px', borderRadius: '3px', transition: 'all 0.4s ease',
-                width: i === sceneIdx ? '18px' : '5px',
-                background: i <= sceneIdx && state !== 'ready' ? '#3b82f6' : 'rgba(255,255,255,0.12)',
-              }} />
+              <button
+                key={i}
+                onClick={() => jumpTo(i)}
+                disabled={state === 'ready'}
+                aria-label={`Go to scene ${i + 1}`}
+                className="group -my-2 py-2 disabled:pointer-events-none"
+              >
+                <span
+                  className={`block h-1.5 rounded-full transition-all duration-300 group-hover:bg-indigo-400 ${
+                    i === sceneIdx ? 'w-5' : 'w-1.5'
+                  } ${i <= sceneIdx && state !== 'ready' ? 'bg-indigo-500' : 'bg-white/15'}`}
+                />
+              </button>
             ))}
           </div>
 
-          {state === 'finished' && (
-            <button onClick={reset} style={{ fontSize: '13px', padding: '7px 18px', borderRadius: '10px', background: '#2563eb', border: 'none', color: 'white', cursor: 'pointer', marginLeft: '8px' }}>
-              New query
+          {state !== 'ready' && (
+            <button
+              onClick={() => jumpTo(sceneIdx + 1)}
+              disabled={sceneIdx >= totalScenes - 1}
+              aria-label="Next scene"
+              className="grid h-8 w-8 place-items-center rounded-lg text-zinc-500 transition hover:bg-white/[0.06] hover:text-white disabled:pointer-events-none disabled:opacity-25"
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M9 18l6-6-6-6" />
+              </svg>
             </button>
           )}
         </div>
 
-        <p style={{ textAlign: 'center', fontSize: '11px', color: '#1f2937', marginTop: '8px' }}>
+        {state === 'finished' && (
+          <div className="mt-3 flex justify-center">
+            <button
+              onClick={reset}
+              className="rounded-lg bg-white px-4 py-1.5 text-[13px] font-medium text-black transition hover:bg-zinc-200 active:scale-[0.98]"
+            >
+              New query
+            </button>
+          </div>
+        )}
+
+        <p className="mt-2 text-center text-[11px] text-zinc-700">
           {state === 'ready' ? 'Ready' : `${sceneIdx + 1} / ${totalScenes}${state === 'finished' ? ' · Complete' : ''}`}
         </p>
       </div>
