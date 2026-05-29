@@ -31,6 +31,9 @@ const draw=(id,d,len)=>{const e=$(id);if(e){gsap.set(e,{opacity:1,strokeDasharra
 const count=(id,to,d)=>{const e=$(id);if(e){gsap.set(e,{opacity:1});const o={v:0};gsap.to(o,{v:to,duration:D(d||1.5),ease:'power1.out',onUpdate:()=>{e.textContent=Math.round(o.v)}})}};
 const stopAnim=id=>{const e=$(id);if(e)gsap.killTweensOf(e)};
 const at=(t,fn)=>{if(_fast){fn();return}const id=setTimeout(fn,t*1e3);_timers.push(id);return id};
+const typewrite=(id,spd)=>{const e=$(id);if(!e)return;if(_fast){gsap.set(e,{opacity:1});return;}const t=e.textContent||'';e.textContent='';gsap.set(e,{opacity:1});let i=0;const step=()=>{if(i<=t.length){e.textContent=t.slice(0,i++);const tid=setTimeout(step,spd||42);_timers.push(tid)}};step()};
+const highlight=(id)=>{const e=$(id);if(e)gsap.fromTo(e,{filter:'brightness(1)'},{filter:'brightness(2.6)',duration:D(.15),yoyo:true,repeat:1,ease:'power2.inOut'})};
+const shake=(id)=>{const e=$(id);if(e)gsap.to(e,{keyframes:[{x:5,duration:.07},{x:-5,duration:.07},{x:3,duration:.06},{x:-3,duration:.06},{x:0,duration:.05}],ease:'none'})};
 // Camera: glide the whole canvas to frame the active scene [tx, ty, scale]
 const cam=t=>{const g=$('cam');if(!g||!t)return;gsap.to(g,{x:t[0],y:t[1],scale:t[2],transformOrigin:'0 0',duration:_fast?0:0.65,ease:'power2.inOut'})};
 
@@ -40,7 +43,7 @@ if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',
 function resetAll(){
   if(!_init)snap();
   _timers.forEach(clearTimeout);_timers=[];
-  document.querySelectorAll('g[id]').forEach(e=>{gsap.killTweensOf(e);gsap.set(e,{clearProps:'transform'});e.style.opacity=_init[e.id]});
+  document.querySelectorAll('g[id]').forEach(e=>{gsap.killTweensOf(e);gsap.set(e,{clearProps:'transform,filter'});e.style.opacity=_init[e.id]});
 }
 
 function goToScene(idx){
@@ -88,6 +91,10 @@ const DEFS = `
   <filter id="glow" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="4" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
   <filter id="glow-lg" x="-75%" y="-75%" width="250%" height="250%"><feGaussianBlur stdDeviation="9" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
   <filter id="shadow" x="-30%" y="-30%" width="160%" height="160%"><feDropShadow dx="0" dy="4" stdDeviation="6" flood-color="#000" flood-opacity="0.45"/></filter>
+  <linearGradient id="grad-blue" x1="0" y1="0" x2="1" y2="1" gradientUnits="objectBoundingBox"><stop offset="0%" stop-color="#6366f1"/><stop offset="100%" stop-color="#8b5cf6"/></linearGradient>
+  <linearGradient id="grad-card" x1="0" y1="0" x2="0" y2="1" gradientUnits="objectBoundingBox"><stop offset="0%" stop-color="rgba(99,102,241,0.22)"/><stop offset="100%" stop-color="rgba(99,102,241,0.04)"/></linearGradient>
+  <linearGradient id="grad-green" x1="0" y1="0" x2="1" y2="1" gradientUnits="objectBoundingBox"><stop offset="0%" stop-color="#10b981"/><stop offset="100%" stop-color="#34d399"/></linearGradient>
+  <linearGradient id="grad-warm" x1="0" y1="0" x2="1" y2="1" gradientUnits="objectBoundingBox"><stop offset="0%" stop-color="#f59e0b"/><stop offset="100%" stop-color="#fb923c"/></linearGradient>
 `;
 
 // Assemble the final self-contained document from our pieces + the model's variable parts.
@@ -149,7 +156,7 @@ Return STRICT JSON only (no markdown, no comments, no trailing commas):
     { "id": "kebab-case-id", "introScene": 0, "x": 60, "y": 180, "w": 180, "h": 90, "desc": "what it is + visual style: shapes, color, label, whether it glows or casts a shadow" }
   ],
   "scenes": [
-    { "enter": ["id"], "exit": ["id"], "move": { "id": [120, -40] }, "beat": "what happens this scene and what should animate — pulse, draw arrows, count numbers up, recolor, orbit, etc." }
+    { "enter": ["id"], "exit": ["id"], "move": { "id": [120, -40] }, "beat": "what happens this scene and what should animate — pulse, draw arrows, count numbers up, recolor, orbit, typewrite a label, highlight key elements, shake on collision/error, etc." }
   ]
 }
 
@@ -178,7 +185,30 @@ const PRIMITIVES_DOC = `  show(id) / hide(id)        — fade in / out
   orbit(id, radius, period)  — looping circular motion
   recolor(id, color)         — animate fill color (state changes)
   stopAnim(id)               — stop an element's looping animation
+  typewrite(id, mspChar)     — character-by-character text reveal (great for code / labels)
+  highlight(id)              — brief brightness flash for emphasis (use on key reveal moments)
+  shake(id)                  — horizontal shake (collisions, errors, surprises)
   at(seconds, fn)            — schedule a staggered call later within the scene`;
+
+const STYLE_EXAMPLES = `
+STYLE REFERENCE — aim for this quality level (coordinates are relative to each element's box origin):
+
+Glowing hero node (70×70 box):
+  <circle cx="35" cy="35" r="28" fill="url(#grad-blue)" filter="url(#glow-lg)"/>
+
+Gradient card with label (200×130 box):
+  <rect width="200" height="130" rx="14" fill="url(#grad-card)" stroke="rgba(99,102,241,0.35)" stroke-width="1" filter="url(#shadow)"/>
+  <text x="16" y="26" font-size="10" font-weight="700" letter-spacing="1.2" fill="#a5b4fc">CATEGORY</text>
+  <text x="16" y="50" font-size="15" font-weight="600" fill="#f1f5f9">Main Label</text>
+  <text x="16" y="70" font-size="11" fill="#64748b">Supporting detail</text>
+
+Pill / badge (130×40 box):
+  <rect width="130" height="40" rx="20" fill="rgba(99,102,241,0.15)" stroke="rgba(99,102,241,0.5)" stroke-width="1"/>
+  <text x="65" y="25" text-anchor="middle" font-size="12" font-weight="600" fill="#a5b4fc">LABEL</text>
+
+Connector arrow between two boxes:
+  <line x1="SRC_X" y1="SRC_Y" x2="DST_X" y2="DST_Y" stroke="rgba(255,255,255,0.35)" stroke-width="1.5" marker-end="url(#ah)"/>
+  <line ... stroke="#60a5fa" stroke-width="2" stroke-dasharray="6 3" marker-end="url(#ahb)"/>  (blue dashed variant)`;
 
 function animatorSystem(sb: Storyboard, i: number): string {
   const introHere = sb.elements.filter(e => e.introScene === i);
@@ -186,18 +216,39 @@ function animatorSystem(sb: Storyboard, i: number): string {
   const boxLines = introHere
     .map(e => `  • #${e.id} — box x:${e.x} y:${e.y} w:${e.w} h:${e.h} — ${e.desc}`)
     .join('\n') || '  (none this scene)';
+
+  const palette = `
+PALETTE (stay strictly within this — no other colors):
+  bg:       ${sb.bg}
+  surface:  rgba(255,255,255,0.06)   — cards, panels
+  accent:   #6366f1                  — primary (indigo)
+  bright:   #a5b4fc                  — labels, highlights on accent
+  success:  #10b981                  — positive / "correct" state
+  warning:  #f59e0b                  — caution / notable
+  text-hi:  #f1f5f9                  — primary readable text
+  text-lo:  #64748b                  — secondary / muted text
+  stroke:   rgba(255,255,255,0.12)   — borders, grid lines`;
+
   return `You are an SVG motion designer drawing ONE scene of a 5-scene animated explainer. The HTML document, CSS, animation engine and shared <defs> are all provided — you output ONLY this scene's new SVG element groups and its scene-control object.
 
 CANVAS: 800×450 viewBox. Wrap every element in <g id="..."> with style="opacity:0" (the scene logic fades it in).
 
 CRITICAL — STAY IN YOUR BOX: each element below has an assigned bounding box {x, y, w, h} (top-left + size). Draw ALL of that element's shapes and text strictly INSIDE its box — nothing may extend past it, or scenes will collide. Size text to fit the box width; wrap long labels onto multiple <text> lines or shorten them. The box position is the element's base for animation.
+${palette}
+${STYLE_EXAMPLES}
 
-PROVIDED <defs> (reference by id, never redefine): marker url(#ah) white arrowhead, url(#ahb) blue arrowhead; filter url(#glow) and url(#glow-lg) for neon glow on luminous/hero elements (this is what makes scenes look premium); filter url(#shadow) for soft depth on solid shapes. You MAY add your OWN gradients in a single <defs>…</defs> at the very top of the @@@SVG section.
+PROVIDED <defs> (reference by id, never redefine):
+  Markers:   url(#ah) white arrowhead, url(#ahb) blue arrowhead
+  Filters:   url(#glow) soft neon, url(#glow-lg) stronger neon — use on hero/focal elements
+             url(#shadow) soft depth on solid cards/panels
+  Gradients: url(#grad-blue) indigo→violet, url(#grad-card) subtle indigo card bg,
+             url(#grad-green) emerald, url(#grad-warm) amber→orange
+  You MAY add your OWN gradients in a single <defs>…</defs> at the very top of @@@SVG.
 
 ANIMATION PRIMITIVES (call inside setup):
 ${PRIMITIVES_DOC}
 
-FULL LAYOUT (every element's id + box, so you can aim arrows/lines between boxes and avoid overlap):
+FULL LAYOUT (every element's id + box, for aiming arrows and avoiding overlap):
 ${JSON.stringify(sb.elements.map(e => ({ id: e.id, x: e.x, y: e.y, w: e.w, h: e.h })))}
 
 YOU ARE DRAWING SCENE ${i + 1} OF 5.
@@ -213,7 +264,7 @@ YOUR OUTPUT — EXACTLY these two sections, no markdown, no code fences:
 @@@SVG
 Draw rich <g id="..."> groups ONLY for the elements first introduced in THIS scene, each strictly inside its box:
 ${boxLines}
-Use gradients, glow/shadow filters, and clear text labels. If this scene introduces no new elements, leave this section empty.
+Apply gradients, glow/shadow filters, and sharp text labels. If this scene introduces no new elements, leave this section empty.
 
 @@@SCENE
 A single JavaScript object literal (starts with { — no "const", no trailing semicolon):
@@ -221,9 +272,9 @@ A single JavaScript object literal (starts with { — no "const", no trailing se
   show: [...],   // the "enter" ids above
   hide: [...],   // the "exit" ids above
   move: {...},   // the "move" map above
-  setup: () => { /* realize the beat: stagger reveals with at(); use pop() on 1–2 entering elements for punch; draw() arrows/lines; count() numbers; recolor() state changes; start pulse/orbit/flow loops */ }
+  setup: () => { /* realize the beat with ≥3 primitives: stagger with at(); pop() 1–2 elements for punch; draw()/flow() connections; count() numbers; typewrite() labels; highlight() on key reveals; pulse()/orbit() for continuous life */ }
 }
-Use only element ids that exist in the storyboard. Keep colors consistent with a single palette.`;
+Use only element ids that exist in the storyboard.`;
 }
 
 // Pull the contents of one @@@SECTION out of a model response.
@@ -301,8 +352,12 @@ function fallbackScene(plan: ScenePlan): string {
   return JSON.stringify({ show: plan?.enter ?? [], hide: plan?.exit ?? [], move: plan?.move ?? {} });
 }
 
+function countAnimCalls(scene: string): number {
+  return (scene.match(/\b(pop|draw|count|pulse|orbit|flow|recolor|typewrite|highlight|shake|at)\s*\(/g) ?? []).length;
+}
+
 async function animateScene(sb: Storyboard, i: number): Promise<{ svg: string; scene: string }> {
-  try {
+  const run = async () => {
     const { text } = await generateText({
       model: anthropic('claude-sonnet-4-6'),
       system: animatorSystem(sb, i),
@@ -312,6 +367,29 @@ async function animateScene(sb: Storyboard, i: number): Promise<{ svg: string; s
     const scene = stripFences(section(text, 'SCENE')).replace(/;\s*$/, '').trim();
     if (!scene.startsWith('{')) throw new Error('no valid scene object');
     return { svg, scene };
+  };
+
+  try {
+    const result = await run();
+
+    // Critique pass: if the setup is sparse (< 2 primitive calls), re-run once with
+    // a richer directive. The fallback keeps the original if the re-run also fails.
+    if (countAnimCalls(result.scene) < 2) {
+      try {
+        const { text } = await generateText({
+          model: anthropic('claude-sonnet-4-6'),
+          system: animatorSystem(sb, i),
+          prompt: `Draw scene ${i + 1}. The previous attempt was visually flat — use at least 4 animation primitives in setup: stagger reveals with at(), pop() entering elements, add a continuous loop (pulse/orbit/flow), and typewrite or highlight the key element.`,
+        });
+        const svg2 = stripFences(section(text, 'SVG'));
+        const scene2 = stripFences(section(text, 'SCENE')).replace(/;\s*$/, '').trim();
+        if (scene2.startsWith('{') && countAnimCalls(scene2) >= 2) {
+          return { svg: svg2 || result.svg, scene: scene2 };
+        }
+      } catch { /* keep original */ }
+    }
+
+    return result;
   } catch {
     // Keep the lesson playable: still reveal/move whatever the storyboard planned.
     return { svg: '', scene: fallbackScene(sb.scenes[i]) };
@@ -370,4 +448,3 @@ export async function generateLesson(query: string): Promise<Lesson> {
     html: assembleHtml(svgBody, scenesText, bg),
   };
 }
-
