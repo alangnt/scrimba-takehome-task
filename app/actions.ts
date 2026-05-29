@@ -371,29 +371,3 @@ export async function generateLesson(query: string): Promise<Lesson> {
   };
 }
 
-import { ElevenLabsClient } from 'elevenlabs';
-
-const elevenlabs = new ElevenLabsClient({ apiKey: process.env.ELEVENLABS_API_KEY });
-
-// Sarah — warm, clear American female. Change voice_id to swap voices.
-const VOICE_ID = 'EXAVITQu4vr4xnSDxMaL';
-
-export async function generateTTS(narrations: string[]): Promise<string[]> {
-  const results = await Promise.all(
-    narrations.map(async (text) => {
-      const stream = await elevenlabs.textToSpeech.convert(VOICE_ID, {
-        text,
-        model_id: 'eleven_turbo_v2_5',
-        output_format: 'mp3_44100_128',
-        voice_settings: { stability: 0.45, similarity_boost: 0.75 },
-      });
-      const chunks: Buffer[] = [];
-      for await (const chunk of stream) {
-        chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
-      }
-      const buffer = Buffer.concat(chunks);
-      return `data:audio/mpeg;base64,${buffer.toString('base64')}`;
-    })
-  );
-  return results;
-}

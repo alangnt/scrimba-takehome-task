@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useRef } from 'react';
-import { generateLesson, generateTTS, Lesson } from './actions';
+import { generateLesson, Lesson } from './actions';
 
 type AppState = 'idle' | 'loading' | 'loading-audio' | 'ready' | 'playing' | 'finished';
 
@@ -53,7 +53,13 @@ export default function App() {
       setLesson(les);
       framesRef.current = les.frames;
       setState('loading-audio');
-      const urls = await generateTTS(les.narrations);
+      const urls = await Promise.all(
+        les.narrations.map(async (text) => {
+          const res = await fetch(`/api/tts?text=${encodeURIComponent(text)}`);
+          const blob = await res.blob();
+          return URL.createObjectURL(blob);
+        })
+      );
       audioUrlsRef.current = urls;
       totalRef.current = les.narrations.length;
       setSceneIdx(0);
@@ -104,6 +110,7 @@ export default function App() {
   const reset = () => {
     audioRef.current?.pause();
     audioRef.current = null;
+    audioUrlsRef.current.forEach(url => URL.revokeObjectURL(url));
     audioUrlsRef.current = [];
     framesRef.current = [];
     totalRef.current = 0;
