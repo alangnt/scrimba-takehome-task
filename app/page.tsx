@@ -33,13 +33,32 @@ export default function App() {
   const [paused, setPaused] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [quipIdx, setQuipIdx] = useState(0);
+  const [quipVisible, setQuipVisible] = useState(true);
   const [lang, setLang] = useState<'en' | 'no'>('en');
+  const [playProgress, setPlayProgress] = useState(0);
 
   useEffect(() => {
     if (state !== 'loading' && state !== 'loading-audio') return;
-    const id = setInterval(() => setQuipIdx(i => (i + 1) % LOADING_QUIPS.length), 3000);
+    const id = setInterval(() => {
+      setQuipVisible(false);
+      setTimeout(() => {
+        setQuipIdx(i => (i + 1) % LOADING_QUIPS.length);
+        setQuipVisible(true);
+      }, 350);
+    }, 3200);
     return () => clearInterval(id);
   }, [state]);
+
+  useEffect(() => {
+    if (state === 'finished') { setPlayProgress(100); return; }
+    if (state !== 'playing' || paused) return;
+    const id = setInterval(() => {
+      const audio = audioRef.current;
+      if (!audio || !isFinite(audio.duration) || audio.duration === 0) return;
+      setPlayProgress(((sceneIdx + audio.currentTime / audio.duration) / totalRef.current) * 100);
+    }, 150);
+    return () => clearInterval(id);
+  }, [state, paused, sceneIdx]);
   const inputRef = useRef<HTMLInputElement>(null);
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -143,9 +162,7 @@ export default function App() {
     setPaused(false);
   };
 
-  const totalScenes = lesson?.narrations.length ?? 5;
   const narration = lesson?.narrations[sceneIdx] ?? '';
-  const progress = state === 'finished' ? 100 : totalScenes > 0 ? (sceneIdx / totalScenes) * 100 : 0;
 
   /* ── IDLE ── */
   if (state === 'idle') {
@@ -238,7 +255,16 @@ export default function App() {
         </div>
         <p className="text-base text-zinc-400">{label}</p>
         <p className="mt-1 text-[13px] text-zinc-600">This can take about a minute — good things take time.</p>
-        <p className="mt-5 text-[13px] text-zinc-500 transition-opacity duration-500">{LOADING_QUIPS[quipIdx]}</p>
+        <p
+          className="mt-5 text-[13px] text-zinc-500"
+          style={{
+            opacity: quipVisible ? 1 : 0,
+            transform: quipVisible ? 'translateY(0)' : 'translateY(5px)',
+            transition: 'opacity 0.3s ease, transform 0.3s ease',
+          }}
+        >
+          {LOADING_QUIPS[quipIdx]}
+        </p>
       </main>
     );
   }
@@ -260,7 +286,7 @@ export default function App() {
       <div className="h-px bg-white/[0.06]">
         <div
           className="h-full bg-gradient-to-r from-indigo-500 to-violet-500 transition-[width] duration-700 ease-out"
-          style={{ width: `${progress}%` }}
+          style={{ width: `${playProgress}%` }}
         />
       </div>
 
