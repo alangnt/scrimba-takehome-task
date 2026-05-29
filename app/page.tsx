@@ -1,9 +1,24 @@
 "use client"
 
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { generateLesson, Lesson } from './actions';
 
 type AppState = 'idle' | 'loading' | 'loading-audio' | 'ready' | 'playing' | 'finished';
+
+const LOADING_QUIPS = [
+  'Convincing Claude it\'s a motion designer…',
+  'Arguing with the laws of physics…',
+  'Generating 47 drafts, keeping the best one…',
+  'Bribing the SVG renderer with compliments…',
+  'Teaching the AI what colours are…',
+  'Having an existential crisis about bounding boxes…',
+  'Asking an AI to explain things to another AI…',
+  'Making electrons do ballet…',
+  'Calculating the exact shade of "pretty"…',
+  'Debugging the vibes…',
+  'Consulting the algorithm gods…',
+  'Whispering sweet nothings to the neural network…',
+];
 
 const EXAMPLES = [
   'Why is the sky blue?',
@@ -17,6 +32,13 @@ export default function App() {
   const [sceneIdx, setSceneIdx] = useState(0);
   const [paused, setPaused] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [quipIdx, setQuipIdx] = useState(0);
+
+  useEffect(() => {
+    if (state !== 'loading' && state !== 'loading-audio') return;
+    const id = setInterval(() => setQuipIdx(i => (i + 1) % LOADING_QUIPS.length), 3000);
+    return () => clearInterval(id);
+  }, [state]);
   const inputRef = useRef<HTMLInputElement>(null);
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -184,9 +206,8 @@ export default function App() {
   /* ── LOADING ── */
   if (state === 'loading' || state === 'loading-audio') {
     const label = state === 'loading' ? 'Generating your lesson…' : 'Preparing audio…';
-    const sublabel = state === 'loading' ? 'Storyboarding, then animating all scenes in parallel' : 'Synthesising narration with ElevenLabs';
     return (
-      <main className="flex min-h-screen flex-col items-center justify-center">
+      <main className="flex min-h-screen flex-col items-center justify-center gap-0">
         <div className="mb-5 flex gap-2.5">
           {[0, 1, 2].map(i => (
             <div
@@ -197,7 +218,8 @@ export default function App() {
           ))}
         </div>
         <p className="text-base text-zinc-400">{label}</p>
-        <p className="mt-1.5 text-[13px] text-zinc-600">{sublabel}</p>
+        <p className="mt-1 text-[13px] text-zinc-600">This can take about a minute — good things take time.</p>
+        <p className="mt-5 text-[13px] text-zinc-500 transition-opacity duration-500">{LOADING_QUIPS[quipIdx]}</p>
       </main>
     );
   }
